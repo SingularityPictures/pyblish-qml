@@ -2,10 +2,9 @@ import re
 import time
 import logging
 
-from PyQt5 import QtCore
-
 from . import util, settings
 from .vendor import six
+from .vendor.Qt5 import QtCore
 
 
 defaults = {
@@ -51,6 +50,7 @@ defaults = {
     "instance": {
         "optional": True,
         "family": None,
+        "category": None,
         "niceName": "default",
         "compatiblePlugins": list(),
     },
@@ -108,7 +108,7 @@ class PropertyType(type(QtCore.QObject)):
     def __new__(cls, name, bases, attrs):
         """Convert class properties into pyqtProperties
 
-        For use in conjuction with the :func:Item factory function.
+        For use in conjunction with the :func:Item factory function.
 
         """
 
@@ -116,7 +116,7 @@ class PropertyType(type(QtCore.QObject)):
             if key.startswith("__"):
                 continue
 
-            notify = QtCore.pyqtSignal()
+            notify = QtCore.Signal()
 
             def set_data(key, value):
                 def set_data(self, value):
@@ -126,8 +126,8 @@ class PropertyType(type(QtCore.QObject)):
                 return set_data
 
             attrs[key + "Changed"] = notify
-            attrs[key] = QtCore.pyqtProperty(
-                type(value) if value is not None else QtCore.QVariant,
+            attrs[key] = QtCore.Property(
+                type(value) if value is not None else "QVariant",
                 fget=lambda self, k=key: getattr(self, cls.prefix + k, None),
                 fset=set_data(key, value),
                 notify=notify)
@@ -144,7 +144,7 @@ class AbstractItem(QtCore.QObject):
 
     """
 
-    __datachanged__ = QtCore.pyqtSignal(QtCore.QObject)
+    __datachanged__ = QtCore.Signal(QtCore.QObject)
 
     def __str__(self):
         return self.name
@@ -198,7 +198,7 @@ class AbstractModel(QtCore.QAbstractListModel):
         super(AbstractModel, self).__init__(parent)
         self.items = util.ItemList(key="id")
 
-    @QtCore.pyqtSlot(int, result=QtCore.QObject)
+    @QtCore.Slot(int, result=QtCore.QObject)
     def item(self, index):
         return self.items[index]
 
@@ -223,6 +223,13 @@ class AbstractModel(QtCore.QAbstractListModel):
 
         return item
 
+    def remove_item(self, item):
+        """Remove item from model"""
+        index = self.items.index(item)
+        self.beginRemoveRows(QtCore.QModelIndex(), index, index)
+        self.items.remove(item)
+        self.endRemoveRows()
+
     def _dataChanged(self, item):
         """Explicitly emit dataChanged upon item changing"""
         index = self.items.index(item)
@@ -239,7 +246,7 @@ class AbstractModel(QtCore.QAbstractListModel):
             except Exception:
                 pass
 
-        return QtCore.QVariant()
+        return "QVariant"
 
     def roleNames(self):
         return {
@@ -274,6 +281,12 @@ class ItemModel(AbstractModel):
         self.instances = util.ItemList(key="id")
         self.sections = util.ItemList(key="id")
 
+    def instance_count(self):
+        """Return the number of `instance` in model"""
+        item_count = len(self.instances)
+        # The first item in `self.instances` is `context`
+        return 0 if item_count < 0 else item_count - 1
+
     def reorder(self, context):
         # Reorder instances in support of "cooperative collection"
         self.beginResetModel()
@@ -295,7 +308,7 @@ class ItemModel(AbstractModel):
 
         self.endResetModel()
 
-    @QtCore.pyqtSlot(QtCore.QVariant)
+    @QtCore.Slot("QVariant")
     def add_plugin(self, plugin):
         """Append `plugin` to model
 
@@ -355,6 +368,10 @@ class ItemModel(AbstractModel):
         }.get(item["type"], "Other")
 
         for action in item["actions"]:
+            if action["__type__"] != "action":
+                # Consider only Actions, ignore Categories
+                continue
+
             if action["on"] == "all":
                 item["actionsIconVisible"] = True
 
@@ -363,7 +380,7 @@ class ItemModel(AbstractModel):
         item = self.add_item(item)
         self.plugins.append(item)
 
-    @QtCore.pyqtSlot(QtCore.QVariant)
+    @QtCore.Slot("QVariant")
     def add_instance(self, instance):
         """Append `instance` to model
 
@@ -386,8 +403,9 @@ class ItemModel(AbstractModel):
         item["itemType"] = "instance"
         item["isToggled"] = instance["data"].get("publish", True)
         item["hasCompatible"] = True
+        item["category"] = item["category"] or item["family"]
 
-        self.add_section(item["family"])
+        self.add_section(item["category"])
 
         # Visualised in Perspective
         families = [instance["data"]["family"]]
@@ -396,6 +414,11 @@ class ItemModel(AbstractModel):
 
         item = self.add_item(item)
         self.instances.append(item)
+
+    def remove_instance(self, item):
+        """Remove `instance` from model"""
+        self.instances.remove(item)
+        self.remove_item(item)
 
     def add_section(self, name):
         """Append `section` to model
@@ -421,7 +444,7 @@ class ItemModel(AbstractModel):
 
         return item
 
-    @QtCore.pyqtSlot(QtCore.QVariant)
+    @QtCore.Slot("QVariant")
     def add_context(self, context, label=None):
         """Append `context` to model
 
@@ -512,7 +535,8 @@ class ItemModel(AbstractModel):
                     if action["on"] == "processed" and not item.processed:
                         actions.remove(action)
 
-                if actions:
+                if any(action["__type__"] == "action" for action in actions):
+                    # Consider only Actions, ignore Categories
                     item.actionsIconVisible = True
 
             # Update section item
@@ -525,7 +549,8 @@ class ItemModel(AbstractModel):
             for section in self.sections:
                 if item.itemType == "plugin" and section.name == item.verb:
                     section_item = section
-                if item.itemType == "instance" and section.name == item.family:
+                if (item.itemType == "instance" and
+                        section.name == item.category):
                     section_item = section
 
             section_item.hasWarning = (
@@ -578,7 +603,7 @@ class ItemModel(AbstractModel):
 
 class ResultModel(AbstractModel):
 
-    added = QtCore.pyqtSignal()
+    added = QtCore.Signal()
 
     def add_item(self, item):
         item_ = defaults["result"].copy()
@@ -718,21 +743,21 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
 
         self.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
 
-    @QtCore.pyqtSlot(int, result=QtCore.QObject)
+    @QtCore.Slot(int, result=QtCore.QObject)
     def item(self, index):
         index = self.index(index, 0, QtCore.QModelIndex())
         index = self.mapToSource(index)
         model = self.sourceModel()
         return model.items[index.row()]
 
-    @QtCore.pyqtSlot(str, result=QtCore.QObject)
+    @QtCore.Slot(str, result=QtCore.QObject)
     def itemByName(self, name):
         model = self.sourceModel()
         for item in model.items:
             if name == item.name:
                 return item
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def add_exclusion(self, role, value):
         """Exclude item if `role` equals `value`
 
@@ -744,7 +769,7 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
 
         self._add_rule(self.excludes, role, value)
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def remove_exclusion(self, role, value=None):
         """Remove exclusion rule
 
@@ -769,11 +794,11 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
 
         self._set_rules(self.excludes, rules)
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def clear_exclusion(self):
         self._clear_group(self.excludes)
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def add_inclusion(self, role, value):
         """Include item if `role` equals `value`
 
@@ -785,7 +810,7 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
 
         self._add_rule(self.includes, role, value)
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def remove_inclusion(self, role, value=None):
         """Remove exclusion rule"""
         self._remove_rule(self.includes, role, value)
@@ -793,7 +818,7 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
     def set_inclusion(self, rules):
         self._set_rules(self.includes, rules)
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def clear_inclusion(self):
         self._clear_group(self.includes)
 
@@ -859,6 +884,6 @@ class ProxyModel(QtCore.QSortFilterProxyModel):
         return super(ProxyModel, self).filterAcceptsRow(
             source_row, source_parent)
 
-    @QtCore.pyqtSlot(result=int)
+    @QtCore.Slot(result=int)
     def rowCount(self, parent=QtCore.QModelIndex()):
         return super(ProxyModel, self).rowCount(parent)

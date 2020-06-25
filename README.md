@@ -3,7 +3,8 @@
 
 The Pyblish QML project provides a graphical frontend to [Pyblish](http://pyblish.com).
 
-[![Build Status](https://travis-ci.org/pyblish/pyblish-qml.svg?branch=master)](https://travis-ci.org/pyblish/pyblish-qml)
+[![Build Status](https://travis-ci.org/pyblish/pyblish-qml.svg?branch=master)](https://travis-ci.org/pyblish/pyblish-qml) [![](https://badge.fury.io/py/pyblish-qml.svg)](https://pypi.org/project/pyblish-qml/)
+
 
 ![](https://cloud.githubusercontent.com/assets/2152766/16178722/30c3d28c-3648-11e6-8361-84f04113af4b.gif)
 
@@ -19,6 +20,7 @@ Pyblish QML works with..
 - Maya 2013+
 - Nuke 8+
 - Houdini 11+
+- Blender 2.79-2.80+
 
 ..and requires an external Python (2 or 3) install with PyQt 5.6+ available.
 
@@ -105,7 +107,6 @@ See [pyblish-maya](https://github.com/pyblish/pyblish-maya#usage) for an example
 
 **Additional Environment Variables**
 
-- `PYBLISH_QML_FOSTER=1` Make QML process a real child of parent process, this makes the otherwise external process act like a native window within a host, to appear below inner windows such as the Script Editor in Maya.
 - `PYBLISH_QML_MODAL=1` Block interactions to parent process, useful for headless publishing where you expect a process to remain alive for as long as QML is. Without this, Pyblish is at the mercy of the parent process, e.g. `mayapy` which quits at the first sign of EOF.
 
 <br>

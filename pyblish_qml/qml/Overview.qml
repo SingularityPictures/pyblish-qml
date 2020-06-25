@@ -86,7 +86,7 @@ Item {
                 width: Math.floor(parent.width / 2.0)  // To keep checkbox border from collapsing
                 height: parent.height
 
-                section.property: "object.family"
+                section.property: "object.category"
                 section.delegate: SectionItem {
                     text: section
                     object: app.instanceProxy.itemByName(section)
@@ -208,13 +208,7 @@ Item {
 
         visible: overview.state != "initialising"
 
-        mode: {
-            if (startup == true) {
-                setMessage("Collecting..")
-                return 1
-            }
-            return overview.state == "publishing" ? 1 : overview.state == "finished" ? 2 : 0
-        }
+        mode:  overview.state == "publishing" ? 1 : overview.state == "finished" ? 2 : 0
 
         width: parent.width
         anchors.bottom: parent.bottom
@@ -236,7 +230,6 @@ Item {
         onFirstRun: {
             app.commentEnabled ? commentBox.up() : null
             commentBox.text = app.comment()
-            footer.startup = false
         }
 
         onStateChanged: {

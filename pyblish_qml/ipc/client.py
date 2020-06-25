@@ -1,4 +1,17 @@
-"""Speak to parent process"""
+"""Speak to parent process
+
+ _____________          ___________
+|             |        |           |
+| pyblish-qml |        | e.g. Maya |
+|             |        |           |
+|      stdout o-------->           |
+|             |        |           |
+|       stdin <--------o           |
+|             |        |           |
+|             |        |           |
+|_____________|        |___________|
+
+"""
 
 import os
 import sys
@@ -33,18 +46,12 @@ class Proxy(object):
     def reset(self):
         return self._dispatch("reset")
 
-    def detach(self):
-        self._dispatch("detach")
-
-    def attach(self, qRect):
-        geometry = [qRect.x(), qRect.y(), qRect.width(), qRect.height()]
-        self._dispatch("attach", args=geometry)
-
-    def popup(self, alert):
-        self._dispatch("popup", args=[alert])
-
     def test(self, **vars):
         """Vars can only be passed as a non-keyword argument"""
+
+        # -> Support JSON, see #364
+        vars["ordersWithError"] = list(vars["ordersWithError"])
+
         return self._dispatch("test", kwargs=vars)
 
     def ping(self):
@@ -139,7 +146,7 @@ class Proxy(object):
         thread.daemon = True
         thread.start()
 
-    def _dispatch(self, func, args=None):
+    def _dispatch(self, func, args=None, kwargs=None):
         """Send message to parent process
 
         Arguments:
@@ -154,6 +161,7 @@ class Proxy(object):
                 "payload": {
                     "name": func,
                     "args": args or list(),
+                    "kwargs": kwargs or dict(),
                 }
             }
         )
@@ -165,7 +173,10 @@ class Proxy(object):
         assert self.channels["response"].empty(), (
             "There were pending messages in the response channel")
 
-        sys.stdout.write(data + "\n")
+        # To ensure successful IPC message parsing, the message and the
+        # surrounding delimiters must be passed to the stream object at once.
+        # See https://github.com/pyblish/pyblish-qml/pull/325 for more info.
+        sys.stdout.write("\n" + data + "\n")
         sys.stdout.flush()
 
         try:

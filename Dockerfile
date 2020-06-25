@@ -3,15 +3,14 @@
 # cd pyblish-qml
 # docker run --rm -v $(pwd):/pyblish-qml pyblish/pyblish-qml
 
-FROM ubuntu:17.10
+FROM ubuntu:18.04
 
 MAINTAINER marcus@abstractfactory.io
 
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
-    python3-pyqt5 \
-    python3-pyqt5.qtquick \
+    python3-pyqt5* \
     python3-pip \
     python3-nose && \
     pip3 install \
